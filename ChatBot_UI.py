@@ -104,8 +104,11 @@ def sidebar_conversations():
             export_data = export_chat(convo)
             st.download_button("📁 Export Chat", export_data, f"{new_title}.txt", mime="text/plain", key=f"export_{cid}")
 
+# ---------------------------Chat Interface-----------------------------------
+
 def chat_interface():
     user_data = get_user_chats()
+
     st.title("🦙💬 Llama 2 Chatbot")
     st.markdown(f"### 👋 Hello, {st.session_state.current_user}!")
 
@@ -115,32 +118,90 @@ def chat_interface():
     if not chat:
         return
 
+    # ---------------- CSS: Pin Chat Input + Hide File Box ----------------
+    st.markdown("""
+    <style>
+    .block-container { padding-bottom: 120px !important; }
+    .stChatInputContainer {
+        position: fixed;
+        bottom: 20px;
+        left: 280px;
+        right: 20px;
+        background: rgba(30,30,38,0.95);
+        border-radius: 20px;
+        padding: 10px 16px;
+        z-index: 1001;
+    }
+    .stFileUploader {
+        position: fixed;
+        bottom: 80px;
+        left: 300px;
+        z-index: 1002;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ---------------- Show chat history ----------------
     for msg in chat["messages"]:
-        if msg["role"] == "user":
-            st.markdown(f"<div class='message user-msg'>🧑 You: {msg['content']}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='message bot-msg'>🤖 Bot: {msg['content']}</div>", unsafe_allow_html=True)
+        with st.chat_message("user" if msg["role"] == "user" else "assistant", avatar="🧑" if msg["role"] == "user" else "🤖"):
+            st.write(msg["content"])
 
-    user_input = st.chat_input("Type your message here...")
-    if user_input:
+    # ---------------- Input Bar & Upload ----------------
+    uploaded_file = st.file_uploader("📎", label_visibility="collapsed", key="upload_input")
+    user_input = st.chat_input("Ask anything...")
+
+    # ---------------- File & Input State Guards ----------------
+    if "last_uploaded_file" not in st.session_state:
+        st.session_state.last_uploaded_file = None
+
+    if "last_input" not in st.session_state:
+        st.session_state.last_input = ""
+
+    new_file_uploaded = uploaded_file is not None and (
+        st.session_state.last_uploaded_file is None or uploaded_file.name != st.session_state.last_uploaded_file.name
+    )
+
+    new_text_input = user_input and user_input != st.session_state.last_input
+
+    # ---------------- Process ----------------
+    if new_file_uploaded or new_text_input:
         if not chat["messages"]:
-            chat["title"] = generate_title(user_input)
+            chat["title"] = generate_title(user_input or uploaded_file.name)
 
-        chat["messages"].append({"role": "user", "content": user_input})
+        if new_text_input:
+            chat["messages"].append({"role": "user", "content": user_input})
+            st.session_state.last_input = user_input
 
-        # Simulated response (replace with real model later)
-        if "hello" in user_input.lower() and not st.session_state.greeted:
+        if new_file_uploaded:
+            file_msg = f"[📎 Uploaded: {uploaded_file.name} ({uploaded_file.size / 1024:.2f} KB)]"
+            chat["messages"].append({"role": "user", "content": file_msg})
+            st.session_state.last_uploaded_file = uploaded_file
+
+        # Generate bot reply
+        if new_file_uploaded:
+            response = f"📄 Got your file `{uploaded_file.name}`. What would you like me to do with it?"
+        elif "hello" in (user_input or "").lower() and not st.session_state.greeted:
             response = f"Hi {st.session_state.current_user}, how can I help you today?"
             st.session_state.greeted = True
         else:
             response = f"You said: {user_input}"
 
         chat["messages"].append({"role": "bot", "content": response})
+        st.rerun()
 
 # ------------------- Main App -------------------
 
 def main():
     st.set_page_config("🦙 Chatbot", "🦙", layout="wide")
+    
+    # Custom CSS to modify layout
+    st.markdown("""
+    <style>
+    .main .block-container {
+        padding-bottom: 120px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     if not st.session_state.current_user:
         auth_interface()
@@ -175,5 +236,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
