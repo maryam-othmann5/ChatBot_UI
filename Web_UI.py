@@ -643,3 +643,183 @@ def main():
 
 if __name__ == "__main__":
     main()
+# //////////////////////////////////////////////////////////////////////////
+
+# import os
+# import re
+# import pymysql
+# import hashlib
+# import gradio as gr
+# from datetime import datetime
+# from dotenv import load_dotenv
+# from PyPDF2 import PdfReader
+
+# # Load environment variables
+# load_dotenv()
+
+# # ----------------- Backend Utility Functions (adapted) -----------------
+
+# def hash_password(password):
+#     return hashlib.sha256(password.encode()).hexdigest()
+
+# def get_app_db_connection():
+#     return pymysql.connect(
+#         host="localhost",
+#         user="mluser",
+#         password="mlpass",
+#         database="ml_proj_db",
+#         charset="utf8mb4",
+#         cursorclass=pymysql.cursors.DictCursor
+#     )
+
+# def check_user(email, password):
+#     try:
+#         conn = get_app_db_connection()
+#         with conn.cursor() as cursor:
+#             cursor.execute(
+#                 "SELECT id, name FROM users WHERE email=%s AND password_hash=%s",
+#                 (email, hash_password(password))
+#             )
+#             result = cursor.fetchone()
+#             return result
+#     except Exception as e:
+#         return None
+#     finally:
+#         if conn:
+#             conn.close()
+
+# def create_user(username, email, password):
+#     try:
+#         conn = get_app_db_connection()
+#         with conn.cursor() as cursor:
+#             cursor.execute(
+#                 "INSERT INTO users (name, email, password_hash) VALUES (%s, %s, %s)",
+#                 (username, email, hash_password(password))
+#             )
+#         conn.commit()
+#         return True
+#     except Exception as e:
+#         return False
+#     finally:
+#         if conn:
+#             conn.close()
+
+# def test_user_db_connection(host, port, username, password, database):
+#     try:
+#         conn = pymysql.connect(
+#             host=host,
+#             port=int(port),
+#             user=username,
+#             password=password,
+#             database=database,
+#             charset="utf8mb4",
+#             cursorclass=pymysql.cursors.DictCursor
+#         )
+#         with conn.cursor() as cursor:
+#             cursor.execute("SHOW TABLES")
+#             tables = cursor.fetchall()
+#         conn.close()
+#         return True, f"Connection successful! Found {len(tables)} tables."
+#     except Exception as e:
+#         return False, f"Connection failed: {str(e)}"
+
+# def generate_title(message: str):
+#     keywords = re.findall(r"\b[a-zA-Z]{4,}\b", message.lower())
+#     blacklist = {"this", "that", "have", "from", "with", "what", "about", "which"}
+#     title_words = [w.capitalize() for w in keywords if w not in blacklist]
+#     return " ".join(title_words[:3]) or "New Chat"
+
+# # ----------------- Chatbot Logic -----------------
+
+# def run_agent(user_input, chat_history):
+#     # Dummy: replace with your RAG pipeline call
+#     response = f"Bot: {user_input[::-1]}"
+#     return response, []
+
+# # ----------------- Gradio App -----------------
+
+# def login_fn(email, password, state):
+#     user = check_user(email, password)
+#     if user:
+#         state['user'] = {'id': user['id'], 'name': user['name']}
+#         state['stage'] = 'db'
+#         return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), f"Welcome, {user['name']}!", state
+#     else:
+#         return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), "Login failed.", state
+
+# def register_fn(name, email, password, state):
+#     if not name or not email or not password:
+#         return "All fields required.", state
+#     success = create_user(name, email, password)
+#     msg = "Account created successfully. Please log in." if success else "Error creating account."
+#     return msg, state
+
+# def db_connect_fn(host, port, username, password, database, state):
+#     ok, msg = test_user_db_connection(host, port, username, password, database)
+#     if ok:
+#         state['db'] = {
+#             "host": host, "port": port, "username": username,
+#             "password": password, "database": database
+#         }
+#         state['stage'] = 'chat'
+#         return gr.update(visible=True), msg, state
+#     else:
+#         return gr.update(visible=False), msg, state
+
+# def chat_fn(message, chat_history, state):
+#     if not chat_history:
+#         chat_history = []
+#     response, sources = run_agent(message, chat_history)
+#     chat_history.append((message, response))
+#     return chat_history, chat_history, state
+
+# def upload_fn(file, chat_history, state):
+#     if file is not None:
+#         # Save and process file as needed
+#         return f"Uploaded: {file.name}", state
+#     return "No file uploaded.", state
+
+# with gr.Blocks() as demo:
+#     state = gr.State({'stage': 'login', 'user': None, 'db': None})
+
+#     with gr.Column(visible=True) as login_col:
+#         gr.Markdown("### Sign In")
+#         l_email = gr.Textbox(label="Email")
+#         l_password = gr.Textbox(label="Password", type="password")
+#         l_btn = gr.Button("Sign In")
+#         l_msg = gr.Markdown("")
+#         gr.Markdown("----")
+#         gr.Markdown("### Register")
+#         r_name = gr.Textbox(label="Name")
+#         r_email = gr.Textbox(label="Email")
+#         r_password = gr.Textbox(label="Password", type="password")
+#         r_btn = gr.Button("Register")
+#         r_msg = gr.Markdown("")
+
+#     with gr.Column(visible=False) as db_col:
+#         gr.Markdown("### Connect to Database")
+#         db_host = gr.Textbox(label="Host", value="localhost")
+#         db_port = gr.Textbox(label="Port", value="3306")
+#         db_user = gr.Textbox(label="Username")
+#         db_pass = gr.Textbox(label="Password", type="password")
+#         db_name = gr.Textbox(label="Database")
+#         db_btn = gr.Button("Connect")
+#         db_msg = gr.Markdown("")
+
+#     with gr.Column(visible=False) as chat_col:
+#         gr.Markdown("### Chatbot")
+#         chatbot = gr.Chatbot()
+#         msg_box = gr.Textbox(placeholder="Type your message here...")
+#         send_btn = gr.Button("Send")
+#         upload = gr.File()
+#         file_btn = gr.Button("Upload Document")
+#         upload_msg = gr.Markdown("")
+
+#     # Logic to show/hide columns
+#     l_btn.click(login_fn, [l_email, l_password, state], [login_col, db_col, chat_col, l_msg, state])
+#     r_btn.click(register_fn, [r_name, r_email, r_password, state], [r_msg, state])
+#     db_btn.click(db_connect_fn, [db_host, db_port, db_user, db_pass, db_name, state], [chat_col, db_msg, state])
+#     send_btn.click(chat_fn, [msg_box, chatbot, state], [chatbot, chatbot, state])
+#     file_btn.click(upload_fn, [upload, chatbot, state], [upload_msg, state])
+
+# demo.launch()
